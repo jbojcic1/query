@@ -43,6 +43,7 @@ mutate(variables, {
   onError,
   onSettled,
   onSuccess,
+  scope,
 })
 ```
 
@@ -109,7 +110,7 @@ mutate(variables, {
 
 **Returns**
 
-- `mutate: (variables: TVariables, { onSuccess, onSettled, onError }) => void`
+- `mutate: (variables: TVariables, { onSuccess, onSettled, onError, scope }) => void`
   - The mutation function you can call with variables to trigger the mutation and optionally hooks on additional callback options.
   - `variables: TVariables`
     - Optional
@@ -126,9 +127,15 @@ mutate(variables, {
     - Optional
     - This function will fire when the mutation is either successfully fetched or encounters an error and be passed either the data or error
     - Void function, the returned value will be ignored
+  - `scope: { id: string } | undefined`
+    - Optional
+    - Overrides the mutation's default scope for this specific call
+    - Set to `undefined` to run the mutation in parallel even if a default scope is set
+    - Set to a different scope id to run the mutation in a different serial queue
   - If you make multiple requests, `onSuccess` will fire only after the latest call you've made.
-- `mutateAsync: (variables: TVariables, { onSuccess, onSettled, onError }) => Promise<TData>`
+- `mutateAsync: (variables: TVariables, { onSuccess, onSettled, onError, scope }) => Promise<TData>`
   - Similar to `mutate` but returns a promise which can be awaited.
+  - Accepts the same options as `mutate`, including `scope` override.
 - `status: MutationStatus`
   - Will be:
     - `idle` initial status prior to the mutation function executing.

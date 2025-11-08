@@ -497,6 +497,179 @@ describe('mutations', () => {
         'finish-B',
       ])
     })
+
+    test('scope can be overridden in mutate call to run in parallel', async () => {
+      const results: Array<string> = []
+
+      const observer1 = new MutationObserver(queryClient, {
+        scope: {
+          id: 'scope',
+        },
+        mutationFn: async () => {
+          results.push('start-A')
+          await sleep(10)
+          results.push('finish-A')
+          return 'a'
+        },
+      })
+
+      const observer2 = new MutationObserver(queryClient, {
+        scope: {
+          id: 'scope',
+        },
+        mutationFn: async () => {
+          results.push('start-B')
+          await sleep(10)
+          results.push('finish-B')
+          return 'b'
+        },
+      })
+
+      // First mutation uses the default scope
+      observer1.mutate('vars1')
+
+      // Give the first mutation a chance to start
+      await vi.advanceTimersByTimeAsync(0)
+
+      // Second mutation overrides scope to undefined, so it runs in parallel
+      observer2.mutate('vars2', { scope: undefined })
+
+      await vi.advanceTimersByTimeAsync(10)
+
+      // Both should run in parallel since the second one has no scope
+      expect(results).toStrictEqual([
+        'start-A',
+        'start-B',
+        'finish-A',
+        'finish-B',
+      ])
+    })
+
+    test('scope can be overridden to a different scope', async () => {
+      const results: Array<string> = []
+
+      const observer1 = new MutationObserver(queryClient, {
+        scope: {
+          id: 'scope1',
+        },
+        mutationFn: async () => {
+          results.push('start-A')
+          await sleep(10)
+          results.push('finish-A')
+          return 'a'
+        },
+      })
+
+      const observer2 = new MutationObserver(queryClient, {
+        scope: {
+          id: 'scope1',
+        },
+        mutationFn: async () => {
+          results.push('start-B')
+          await sleep(10)
+          results.push('finish-B')
+          return 'b'
+        },
+      })
+
+      // First mutation uses scope1
+      observer1.mutate('vars1')
+
+      // Second mutation overrides to scope2, so it runs in parallel with scope1
+      observer2.mutate('vars2', { scope: { id: 'scope2' } })
+
+      await vi.advanceTimersByTimeAsync(10)
+
+      // Both should run in parallel since they have different scopes
+      expect(results).toStrictEqual([
+        'start-A',
+        'start-B',
+        'finish-A',
+        'finish-B',
+      ])
+    })
+
+    test('unscoped mutation can be scoped via mutate call', async () => {
+      const results: Array<string> = []
+
+      const observer1 = new MutationObserver(queryClient, {
+        mutationFn: async () => {
+          results.push('start-A')
+          await sleep(10)
+          results.push('finish-A')
+          return 'a'
+        },
+      })
+
+      const observer2 = new MutationObserver(queryClient, {
+        mutationFn: async () => {
+          results.push('start-B')
+          await sleep(10)
+          results.push('finish-B')
+          return 'b'
+        },
+      })
+
+      // First mutation has no scope
+      observer1.mutate('vars1')
+
+      // Second mutation adds a scope via mutate call
+      observer2.mutate('vars2', { scope: { id: 'scope' } })
+
+      await vi.advanceTimersByTimeAsync(10)
+
+      // Both should run in parallel since the first one has no scope
+      expect(results).toStrictEqual([
+        'start-A',
+        'start-B',
+        'finish-A',
+        'finish-B',
+      ])
+    })
+
+    test('subsequent calls without scope override use original scope', async () => {
+      const results: Array<string> = []
+
+      const observer = new MutationObserver(queryClient, {
+        scope: {
+          id: 'original-scope',
+        },
+        mutationFn: async () => {
+          results.push('mutation')
+          await sleep(10)
+          return 'result'
+        },
+      })
+
+      // First call with scope override
+      const mutatePromise1 = observer.mutate('vars1', {
+        scope: { id: 'override-scope' },
+      })
+
+      // Advance timers to complete the first mutation
+      await vi.advanceTimersByTimeAsync(10)
+      await mutatePromise1
+
+      // Second call without scope override should use the original scope
+      const mutatePromise2 = observer.mutate('vars2')
+
+      // Advance timers to complete the second mutation
+      await vi.advanceTimersByTimeAsync(10)
+      await mutatePromise2
+
+      // Get the mutations from the cache
+      const mutations = queryClient.getMutationCache().getAll()
+
+      // First mutation should have the overridden scope
+      expect(mutations[mutations.length - 2]?.options.scope?.id).toBe(
+        'override-scope',
+      )
+
+      // Second mutation should have the original scope
+      expect(mutations[mutations.length - 1]?.options.scope?.id).toBe(
+        'original-scope',
+      )
+    })
   })
 
   test('mutations without scope should run in parallel', async () => {

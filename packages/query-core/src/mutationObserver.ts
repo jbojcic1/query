@@ -133,9 +133,15 @@ export class MutationObserver<
 
     this.#currentMutation?.removeObserver(this)
 
+    // Apply scope override if provided (check if 'scope' key exists in options)
+    const mutationOptions =
+      options && 'scope' in options
+        ? { ...this.options, scope: options.scope }
+        : this.options
+
     this.#currentMutation = this.#client
       .getMutationCache()
-      .build(this.#client, this.options)
+      .build(this.#client, mutationOptions)
 
     this.#currentMutation.addObserver(this)
 
