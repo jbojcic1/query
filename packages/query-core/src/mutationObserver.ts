@@ -39,6 +39,7 @@ export class MutationObserver<
   > = undefined!
   #currentMutation?: Mutation<TData, TError, TVariables, TOnMutateResult>
   #mutateOptions?: MutateOptions<TData, TError, TVariables, TOnMutateResult>
+  #mutationScopeOverride?: boolean
 
   constructor(
     client: QueryClient,
@@ -89,7 +90,17 @@ export class MutationObserver<
     ) {
       this.reset()
     } else if (this.#currentMutation?.state.status === 'pending') {
-      this.#currentMutation.setOptions(this.options)
+      // Preserve the current mutation's scope if it was set via mutate() options override
+      // This ensures that scope overrides from mutate() calls are not lost when setOptions
+      // is called (e.g., during React re-renders), while still allowing scope updates
+      // when the scope is defined in the observer options
+      const shouldPreserveScope =
+        this.#mutationScopeOverride && this.#currentMutation.options.scope
+      this.#currentMutation.setOptions(
+        shouldPreserveScope
+          ? { ...this.options, scope: this.#currentMutation.options.scope }
+          : this.options,
+      )
     }
   }
 
@@ -121,6 +132,7 @@ export class MutationObserver<
     // another mutate call will yield a new mutation!
     this.#currentMutation?.removeObserver(this)
     this.#currentMutation = undefined
+    this.#mutationScopeOverride = undefined
     this.#updateResult()
     this.#notify()
   }
@@ -133,9 +145,18 @@ export class MutationObserver<
 
     this.#currentMutation?.removeObserver(this)
 
+    // Track if scope was provided via mutate options (not observer options)
+    // This flag is used in setOptions to preserve scope overrides
+    this.#mutationScopeOverride = !!options?.scope
+
+    // Merge scope from mutate options if provided
+    const mutationOptions = options?.scope
+      ? { ...this.options, scope: options.scope }
+      : this.options
+    
     this.#currentMutation = this.#client
       .getMutationCache()
-      .build(this.#client, this.options)
+      .build(this.#client, mutationOptions)
 
     this.#currentMutation.addObserver(this)
 
